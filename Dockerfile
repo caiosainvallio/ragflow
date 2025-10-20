@@ -174,9 +174,8 @@ COPY web web
 COPY docs docs
 RUN cd web && npm install && npm run build
 
-COPY .git /ragflow/.git
-
-RUN version_info=$(git describe --tags --match=v* --first-parent --always); \
+# Generate version info without .git dependency (Railway compatible)
+RUN version_info="v2.0-railway-$(date +%Y%m%d-%H%M%S)"; \
     if [ "$LIGHTEN" == "1" ]; then \
         version_info="$version_info slim"; \
     else \

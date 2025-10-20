@@ -1,50 +1,43 @@
 # Deploy RAGFlow no Railway.com
 
-Este guia explica como resolver o erro de cache mounts ao fazer deploy no Railway.com.
+Este guia explica como fazer deploy do RAGFlow no Railway.com.
 
-## Problema
+## ✅ Correções Implementadas
 
-O Railway.com tem requisitos mais rígidos para cache mounts e pode exigir o formato:
-```
---mount=type=cache,id=<cache-id>,target=<path>,sharing=locked
-```
+O `Dockerfile` foi otimizado para Railway.com com as seguintes mudanças:
 
-## Soluções
+1. **Removidos todos os `--mount` cache mounts** - Railway não suporta essa sintaxe
+2. **Substituídos bind mounts por `COPY --from=deps`** - Usa sintaxe Docker padrão
+3. **Removida dependência do `.git`** - Versão gerada automaticamente no build
+4. **Adicionado `.dockerignore`** - Otimiza o contexto de build
 
-### Solução 1: Usar o Dockerfile principal atualizado (Recomendado)
+## 🚀 Como Fazer Deploy
 
-O `Dockerfile` principal foi atualizado com o parâmetro `sharing=locked` em todos os cache mounts. Esta é a solução preferida pois mantém as otimizações de cache.
+### No Railway.com:
 
-**No Railway.com:**
-1. Vá para as configurações do seu projeto
-2. Certifique-se de que está usando `Dockerfile` (padrão)
-3. Faça o deploy normalmente
+1. Conecte seu repositório no Railway
+2. O Railway detectará automaticamente o `Dockerfile`
+3. O deploy será feito automaticamente
 
-### Solução 2: Usar Dockerfile.railway (Sem cache)
+**Pronto!** Não precisa de configurações adicionais.
 
-Se a Solução 1 ainda não funcionar, use o `Dockerfile.railway` que remove completamente os cache mounts.
+## 📋 Arquivos Importantes
 
-**No Railway.com:**
-1. Vá para as configurações do seu projeto
-2. Em "Build Configuration" → "Dockerfile Path"
-3. Altere de `Dockerfile` para `Dockerfile.railway`
-4. Salve e faça o deploy
+### Dockerfile
+- ✅ Compatível com Railway.com
+- ✅ Sem sintaxe `--mount`
+- ✅ Usa `COPY --from=deps` (sintaxe padrão)
+- ✅ Não depende do `.git`
+- ✅ Gera versão automaticamente: `v2.0-railway-YYYYMMDD-HHMMSS`
 
-**Nota:** Esta solução será mais lenta no build, mas garantida para funcionar.
+### .dockerignore
+- Otimiza o contexto de build
+- Exclui `.git`, `node_modules`, `__pycache__`, etc.
+- Reduz tempo de upload e build
 
-## Diferenças entre os Dockerfiles
-
-### Dockerfile (Principal)
-- ✅ Usa cache mounts com `sharing=locked`
-- ✅ Builds mais rápidos
-- ✅ Menor uso de rede
-- ⚠️  Requer suporte a cache mounts no Railway
-
-### Dockerfile.railway
-- ✅ Sem cache mounts (compatível com qualquer plataforma)
-- ✅ 100% compatível com Railway.com
-- ⚠️  Builds mais lentos
-- ⚠️  Maior uso de rede (re-download de pacotes)
+### Dockerfile.railway (Backup)
+- Versão alternativa caso necessário
+- Funcionalidade idêntica ao `Dockerfile` principal
 
 ## Testando Localmente
 
