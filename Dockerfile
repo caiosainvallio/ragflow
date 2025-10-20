@@ -1,3 +1,7 @@
+# Railway-compatible Dockerfile (without --mount syntax)
+# deps stage - pull dependencies image
+FROM infiniflow/ragflow_deps:latest AS deps
+
 # base stage
 FROM ubuntu:22.04 AS base
 USER root
@@ -9,28 +13,32 @@ ENV LIGHTEN=${LIGHTEN}
 
 WORKDIR /ragflow
 
-# Copy models downloaded via download_deps.py
+# Copy models from deps image
 RUN mkdir -p /ragflow/rag/res/deepdoc /root/.ragflow
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/huggingface.co,target=/huggingface.co \
-    cp /huggingface.co/InfiniFlow/huqie/huqie.txt.trie /ragflow/rag/res/ && \
-    tar --exclude='.*' -cf - \
-        /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 \
-        /huggingface.co/InfiniFlow/deepdoc \
-        | tar -xf - --strip-components=3 -C /ragflow/rag/res/deepdoc 
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/huggingface.co,target=/huggingface.co \
-    if [ "$LIGHTEN" != "1" ]; then \
-        (tar -cf - \
-            /huggingface.co/BAAI/bge-large-zh-v1.5 \
-            /huggingface.co/maidalun1020/bce-embedding-base_v1 \
-            | tar -xf - --strip-components=2 -C /root/.ragflow) \
+
+COPY --from=deps /huggingface.co/InfiniFlow/huqie/huqie.txt.trie /ragflow/rag/res/
+COPY --from=deps /huggingface.co/InfiniFlow/text_concat_xgb_v1.0 /tmp/text_concat_xgb_v1.0
+COPY --from=deps /huggingface.co/InfiniFlow/deepdoc /tmp/deepdoc
+
+RUN mv /tmp/text_concat_xgb_v1.0 /ragflow/rag/res/deepdoc/ && \
+    mv /tmp/deepdoc /ragflow/rag/res/deepdoc/
+
+# Copy embeddings if not LIGHTEN mode
+COPY --from=deps /huggingface.co/BAAI/bge-large-zh-v1.5 /tmp/bge-large-zh-v1.5
+COPY --from=deps /huggingface.co/maidalun1020/bce-embedding-base_v1 /tmp/bce-embedding-base_v1
+
+RUN if [ "$LIGHTEN" != "1" ]; then \
+        mv /tmp/bge-large-zh-v1.5 /root/.ragflow/ && \
+        mv /tmp/bce-embedding-base_v1 /root/.ragflow/; \
+    else \
+        rm -rf /tmp/bge-large-zh-v1.5 /tmp/bce-embedding-base_v1; \
     fi
 
-# https://github.com/chrismattmann/tika-python
-# This is the only way to run python-tika without internet access. Without this set, the default is to check the tika version and pull latest every time from Apache.
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
-    cp -r /deps/nltk_data /root/ && \
-    cp /deps/tika-server-standard-3.0.0.jar /deps/tika-server-standard-3.0.0.jar.md5 /ragflow/ && \
-    cp /deps/cl100k_base.tiktoken /ragflow/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+# Copy other dependencies from deps image
+COPY --from=deps /nltk_data /root/nltk_data
+COPY --from=deps /tika-server-standard-3.0.0.jar /ragflow/
+COPY --from=deps /tika-server-standard-3.0.0.jar.md5 /ragflow/
+COPY --from=deps /cl100k_base.tiktoken /ragflow/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
 
 ENV TIKA_SERVER_JAR="file:///ragflow/tika-server-standard-3.0.0.jar"
 ENV DEBIAN_FRONTEND=noninteractive
@@ -116,23 +124,28 @@ RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
 
 
 # Add dependencies of selenium
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chrome-linux64-121-0-6167-85,target=/chrome-linux64.zip \
-    unzip /chrome-linux64.zip && \
+COPY --from=deps /chrome-linux64-121-0-6167-85 /tmp/chrome-linux64.zip
+RUN unzip /tmp/chrome-linux64.zip && \
     mv chrome-linux64 /opt/chrome && \
-    ln -s /opt/chrome/chrome /usr/local/bin/
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/chromedriver-linux64-121-0-6167-85,target=/chromedriver-linux64.zip \
-    unzip -j /chromedriver-linux64.zip chromedriver-linux64/chromedriver && \
+    ln -s /opt/chrome/chrome /usr/local/bin/ && \
+    rm /tmp/chrome-linux64.zip
+
+COPY --from=deps /chromedriver-linux64-121-0-6167-85 /tmp/chromedriver-linux64.zip
+RUN unzip -j /tmp/chromedriver-linux64.zip chromedriver-linux64/chromedriver && \
     mv chromedriver /usr/local/bin/ && \
-    rm -f /usr/bin/google-chrome
+    rm -f /usr/bin/google-chrome /tmp/chromedriver-linux64.zip
 
 # https://forum.aspose.com/t/aspose-slides-for-net-no-usable-version-of-libssl-found-with-linux-server/271344/13
 # aspose-slides on linux/arm64 is unavailable
-RUN --mount=type=bind,from=infiniflow/ragflow_deps:latest,source=/,target=/deps \
-    if [ "$(uname -m)" = "x86_64" ]; then \
-        dpkg -i /deps/libssl1.1_1.1.1f-1ubuntu2_amd64.deb; \
+COPY --from=deps /libssl1.1_1.1.1f-1ubuntu2_amd64.deb /tmp/
+COPY --from=deps /libssl1.1_1.1.1f-1ubuntu2_arm64.deb /tmp/
+
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        dpkg -i /tmp/libssl1.1_1.1.1f-1ubuntu2_amd64.deb; \
     elif [ "$(uname -m)" = "aarch64" ]; then \
-        dpkg -i /deps/libssl1.1_1.1.1f-1ubuntu2_arm64.deb; \
-    fi
+        dpkg -i /tmp/libssl1.1_1.1.1f-1ubuntu2_arm64.deb; \
+    fi && \
+    rm -f /tmp/libssl*.deb
 
 
 # builder stage
