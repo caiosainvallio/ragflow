@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7-labs
 # base stage
 FROM ubuntu:22.04 AS base
 USER root
@@ -42,7 +43,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # python-pptx:   default-jdk                              tika-server-standard-3.0.0.jar
 # selenium:      libatk-bridge2.0-0                       chrome-linux64-121-0-6167-85
 # Building C extensions: libpython3-dev libgtk-4-1 libnss3 xdg-utils libgbm-dev
-RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt  \
     if [ "$NEED_MIRROR" == "1" ]; then \
         sed -i 's|http://ports.ubuntu.com|http://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list; \
         sed -i 's|http://archive.ubuntu.com|http://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list; \
@@ -76,7 +77,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
 ENV PATH=/root/.local/bin:$PATH
 
 # nodejs 12.22 on Ubuntu 22.04 is too old
-RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt  \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt purge -y nodejs npm cargo && \
     apt autoremove -y && \
@@ -102,7 +103,7 @@ RUN cargo --version && rustc --version
 # Add msssql ODBC driver
 # macOS ARM64 environment, install msodbcsql18.
 # general x86_64 environment, install msodbcsql17.
-RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt,sharing=locked \
+RUN --mount=type=cache,id=ragflow_apt,target=/var/cache/apt  \
     curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
     curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
     apt update && \
@@ -149,7 +150,7 @@ COPY pyproject.toml uv.lock ./
 
 # https://github.com/astral-sh/uv/issues/10462
 # uv records index url into uv.lock but doesn't failover among multiple indexes
-RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
+RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv  \
     if [ "$NEED_MIRROR" == "1" ]; then \
         sed -i 's|pypi.org|mirrors.aliyun.com/pypi|g' uv.lock; \
     else \
@@ -163,7 +164,7 @@ RUN --mount=type=cache,id=ragflow_uv,target=/root/.cache/uv,sharing=locked \
 
 COPY web web
 COPY docs docs
-RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm,sharing=locked \
+RUN --mount=type=cache,id=ragflow_npm,target=/root/.npm  \
     cd web && npm install && npm run build
 
 COPY .git /ragflow/.git
